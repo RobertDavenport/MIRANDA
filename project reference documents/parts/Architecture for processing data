@@ -1,0 +1,18 @@
+----Architecture for processing data----
+
+The processing for the Adafruit feather 32u4 Bluefruit LE will be done
+on arduino ide in C and C++.
+
+---Planned Libraries----
+
+TFLI2c - A library giving ToF (Time of Flight ) for LiDAR sensors. This
+    will measure the distance to an object. Allowing us to retreive distance
+    vectors to approximate objects. This library is specifically for use for
+    The TF Luna, although the TF Mini Library, TFMini, also appears to be functional if issues
+    arise.
+
+SoftwareSerial - Part of arduino IDE, allowing for serialization of additional
+    ports for the board. This will give us additional pins to use to connect to
+    our lidar sensor, the TF Luna.
+
+
