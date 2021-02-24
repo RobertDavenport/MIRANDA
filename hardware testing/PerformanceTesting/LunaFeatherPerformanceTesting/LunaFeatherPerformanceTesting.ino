@@ -25,34 +25,70 @@ const int HAPTIC_MOTOR_1 = 6;
 // Pinout for sensor enable
 const int TF_LUNA_1 = 10;
 
+
+// Number of test cases per run
+const int numTests = 1000;
+
+// Number of runs
+const int numRuns = 100;
+
+unsigned long start, finished, elapsed;
+unsigned long averageTime;
+unsigned long runningSum;
+unsigned long overallSum;
+unsigned long overallAverage;
+
+bool testRun;
+
 void setup() {
   // Initialize the haptic motor's control pin.
   pinMode(HAPTIC_MOTOR_1, OUTPUT);
   pinMode(TF_LUNA_1, OUTPUT);
   Serial.begin(115200); // Init serial port with baud rate of 115200
-  sensorSetup(tfSensorOne, defaultAddress);
   Wire.begin();         // Init wire library
-  
+  testRun = true;
 }
 
 
 void loop() {
   digitalWrite(TF_LUNA_1, LOW);
+  delay(2000);
+  if (testRun == true) {
+    overallSum = 0;
+    overallAverage = 0;
+     for (int i = 1; i <= numRuns; i++) {
+        Serial.print("Run #: ");
+        Serial.println(i);
+        averageTime = 0;
+        runningSum = 0;
+        for (int j = 1; j <= numTests; j++) {
+          runningSum += sensorPerformance();
+        }
+        averageTime = runningSum / numTests;
+        Serial.print("Average Time: ");
+        Serial.println(averageTime);
+        Serial.println();
+        overallSum += averageTime;
+        delay(50);
+      }
+      overallAverage = overallSum / numRuns;
+      Serial.println("###############################################");
+      Serial.print("Overall Average: ");
+      Serial.print(overallAverage);
+      Serial.println(" microseconds");
+      testRun = false;
+  }
+
+}
+
+unsigned long sensorPerformance () {
+  start = micros();
   tfli2c.getData(tfDistance, defaultAddress);
-  Serial.print("Distance: ");
-  Serial.println(tfDistance);
   feedback(HAPTIC_MOTOR_1,tfDistance);
-  delay(200);
+  finished = micros();
+  elapsed = finished-start;
+  return elapsed;
 }
-
-
-// setup to change sensor address
-void sensorSetup(uint8_t sensorAddress, uint8_t defaultAddress) {
-   tfli2c.Set_I2C_Addr(sensorAddress, defaultAddress);
-   tfli2c.Soft_Reset(sensorAddress);
-}
-
-
 
 // Applies the proportional feedback of a passed distance
 // to the haptic motor passed by its control pin.
@@ -73,8 +109,6 @@ void feedback(int hapticMotor, int dist) {
   // as the ground for the motor, which is powered from the 5V
   // rail.
   dist = map(dist, MIN_DISTANCE, MAX_DISTANCE, MAX_MOTOR_SPEED, MIN_MOTOR_SPEED);
-  Serial.print("Intensity: ");
-  Serial.println(dist);
 
   // PWM the haptic unit for the mapped intensity.
   analogWrite(hapticMotor, MIN_DISTANCE+dist);
