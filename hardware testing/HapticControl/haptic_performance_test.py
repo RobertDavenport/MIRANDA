@@ -1,8 +1,10 @@
+# imports
 import serial
 import time
 import datetime
 import json
 
+# connect to serial
 def connect(port,baud):
     try:
         return serial.Serial(port=port,baudrate=baud,timeout=5)
@@ -10,15 +12,18 @@ def connect(port,baud):
         print('Could not connect on serial port {}'.format(port))
         exit(1)
 
+# disconnect from serial
 def disconnect(serial_connection):
     serial_connection.close()
 
+# write to the log file
 def save_data_log(data, path):
     timestamp = str(datetime.datetime.now()).replace(':','').replace('.','')
     log_file = open(LOG_FILE_PATH.format(timestamp), 'w')
     log_file.write(json.dumps(data))
     log_file.close()
 
+# take the average of the test data
 def avg(data):
     total = 0
     for value in data['TESTS']:
@@ -26,6 +31,7 @@ def avg(data):
     average = total/len(data['TESTS'])
     print("Average", average)
 
+# get the extra data (worst/best) of the tests
 def extr(data):
     worst = data['TESTS'][0]
     best = data['TESTS'][0]
@@ -38,7 +44,7 @@ def extr(data):
     print("Best", best)
     print("Worst", worst)
 
-
+# statics
 SERIAL_PORT = 'COM8'
 BAUD_RATE = 115200
 LOG_FILE_PATH = 'LOG{}.txt'

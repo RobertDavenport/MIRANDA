@@ -1,8 +1,10 @@
+# imports
 import serial
 import time
 import datetime
 import json
 
+# connect to serial
 def connect(port,baud):
     try:
         return serial.Serial(port=port,baudrate=baud,timeout=5)
@@ -10,25 +12,29 @@ def connect(port,baud):
         print('Could not connect on serial port {}'.format(port))
         exit(1)
 
+# disconnect from serial
 def disconnect(serial_connection):
     serial_connection.close()
 
+# log the data in a file
 def log_data(data, value_in, value_out):
     data['TESTS'].append((value_in, value_out))
 
+# write to the file
 def save_data_log(data, path):
     timestamp = str(datetime.datetime.now()).replace(':','').replace('.','')
     log_file = open(LOG_FILE_PATH.format(timestamp), 'w')
     log_file.write(json.dumps(data))
     log_file.close()
 
+# test the values we want to test, this will generally be intensity vs distance
 def test_value(serial_connection, data, value):
     serial_connection.write(str(value).encode('ascii'))
     value_out = serial_connection.readline().decode('ascii').strip()
     log_data(data, value, value_out)
     return value
 
-
+# statics
 SERIAL_PORT = 'COM6'
 BAUD_RATE = 115200
 LOG_FILE_PATH = 'LOG{}.txt'
