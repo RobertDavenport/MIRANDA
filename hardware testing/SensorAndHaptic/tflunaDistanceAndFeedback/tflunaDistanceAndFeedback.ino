@@ -24,7 +24,7 @@ unsigned char hapticIntensityOne;
 int distance;
 
 // Pinout for haptic unit control.
-const int HAPTIC_MOTOR_1 = 5;
+const int HAPTIC_MOTOR_1 = 6;
 
 void setup() {
   // Initialize the haptic motor's control pin.
