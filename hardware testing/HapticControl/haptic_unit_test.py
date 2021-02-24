@@ -32,7 +32,16 @@ def test_value(serial_connection, data, value):
     serial_connection.write(str(value).encode('ascii'))
     value_out = serial_connection.readline().decode('ascii').strip()
     log_data(data, value, value_out)
-    return value
+    check_value([MIN_DISTANCE, MAX_DISTANCE], [MIN_MOTOR_SPEED, MAX_MOTOR_SPEED], value, int(value_out))
+    return value_out
+        
+# checks if the mapping of intensity vs distance is correct
+def check_value(in_range, out_range, in_value, out_value):
+    # Normalized the input range to the output range, mapping the value to it.
+    normalized = int(((in_value-in_range[0])/(in_range[1]-in_range[0])) * (out_range[1] - out_range[1]) + out_range[0])
+    # Checks if the output value matches the computed normalized value
+    if(out_value != normalized):
+        print("Incorrect output: {} -> \'{}\'. correct output: {}".format(in_value, out_value, normalized))
 
 # statics
 SERIAL_PORT = 'COM6'
