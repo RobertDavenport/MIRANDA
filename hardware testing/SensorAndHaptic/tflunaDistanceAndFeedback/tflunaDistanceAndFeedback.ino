@@ -16,6 +16,8 @@ TFLI2C tfli2c;
 int16_t tfDistance;   // cm
 uint8_t defaultAddress = 0x10;
 uint8_t tfSensorOne = 0x08;
+uint8_t tfSensorTwo = 0x09;
+uint8_t tfSensorThree = 0x0A;
 unsigned char hapticIntensityOne;
 
 
@@ -30,7 +32,7 @@ void setup() {
   pinMode(HAPTIC_MOTOR_1, OUTPUT);
   pinMode(TF_LUNA_1, OUTPUT);
   Serial.begin(115200); // Init serial port with baud rate of 115200
-  sensorSetup(tfSensorOne, defaultAddress);
+  //sensorSetup(tfSensorOne, defaultAddress);
   Wire.begin();         // Init wire library
   
 }
@@ -49,7 +51,8 @@ void loop() {
 // setup to change sensor address
 void sensorSetup(uint8_t sensorAddress, uint8_t defaultAddress) {
    tfli2c.Set_I2C_Addr(sensorAddress, defaultAddress);
-   tfli2c.Soft_Reset(sensorAddress);
+   tfli2c.Save_Settings(defaultAddress);
+   tfli2c.Soft_Reset(defaultAddress);
 }
 
 
