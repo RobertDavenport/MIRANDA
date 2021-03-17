@@ -1,12 +1,16 @@
 #include <Arduino.h>
 #include <TFLI2C.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
 
 #define MAX_DISTANCE 450
 #define MIN_DISTANCE 1
 
 #define MIN_MOTOR_SPEED 100
 #define MAX_MOTOR_SPEED 255
+
+const byte rx = 11;
+const byte tx = 12;
 
 int16_t tfDistance;
 uint8_t tfAddress = 0x10;
@@ -15,14 +19,24 @@ unsigned char hapticIntensityOne;
 
 const int TF_LUNA_1 = 10;
 const int WRIST_0 = 9;
+
 TFLI2C tfli2c;
+SoftwareSerial softSerial = SoftwareSerial(rx, tx);
 
 
 
 void setup() {
   pinMode(TF_LUNA_1, OUTPUT);
   pinMode(WRIST_0, OUTPUT);
-  Serial.begin(9600);
+
+  // software serial pins
+  pinMode(rx, INPUT);
+  pinMode(tx, OUTPUT);
+  
+  Serial.begin(115200);
+
+  softSerial.begin(115200);
+  
   Wire.begin();
   digitalWrite(TF_LUNA_1, LOW);
 }
@@ -30,7 +44,7 @@ void setup() {
 void loop() {
   tfli2c.getData(tfDistance, tfAddress);
   int feedBack = feedback(tfDistance);
-  analogWrite(WRIST_0, feedBack);
+  softSerial.println(feedBack);
   Serial.println(feedBack);
   delay(150);
 }
