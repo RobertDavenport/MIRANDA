@@ -57,3 +57,41 @@ void wait(unsigned long milliseconds) {
     yield();
   }
 }
+
+unsigned long loopcount = 0;
+
+// TESTING
+// General initialization vector
+byte enc_iv[N_BLOCK] =      { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
+byte enc_iv_to[N_BLOCK]   = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
+byte enc_iv_from[N_BLOCK] = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
+
+void loop() {
+
+  Serial.print("readBuffer length: "); Serial.println(sizeof(readBuffer));
+
+   // must not exceed INPUT_BUFFER_LIMIT bytes; may contain a newline
+  sprintf((char*)plaintext, "%s", readBuffer);
+
+  // Encrypt
+  // iv_block gets written to, provide own fresh copy... so each iteration of encryption will be the same.
+  uint16_t msgLen = sizeof(readBuffer);
+  memcpy(enc_iv, enc_iv_to, sizeof(enc_iv_to));
+  uint16_t encLen = encrypt_to_ciphertext((char*)plaintext, msgLen, enc_iv);
+  Serial.print("Encrypted length = "); Serial.println(encLen );
+
+  Serial.println("Encrypted. Decrypting..."); Serial.println(encLen ); Serial.flush();
+  memcpy(enc_iv, enc_iv_from, sizeof(enc_iv_from));
+  uint16_t decLen = decrypt_to_plaintext(ciphertext, encLen , enc_iv);
+  Serial.print("Decrypted plaintext of length: "); Serial.println(decLen);
+  Serial.print("Decrypted plaintext:\n"); Serial.println((char*)plaintext);
+
+  if (strcmp((char*)readBuffer, (char*)plaintext) == 0) {
+    Serial.println("Decrypted correctly.");
+  } else {
+    Serial.println("Decryption test failed.");
+  }
+
+  Serial.println("---");
+
+}
