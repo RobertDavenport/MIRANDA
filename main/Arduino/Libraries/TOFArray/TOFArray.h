@@ -6,6 +6,7 @@
 #define minVal 0
 #define maxVal 450
 
+// Array of ultrasonic distance sensors.
 class TOFArray
 {
 	public:
