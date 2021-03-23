@@ -8,11 +8,12 @@
 #define minVal 265
 #define maxVal 402
 
+
 class AccelGyro
 {
 	public:
 		AccelGyro();
-		AccelGyro(double *agx, double *agy, double *agz);
+		AccelGyro(double *gx, double *gy, double *gz);
 		void computeAngles();
 		void initAngles();
 	private:
