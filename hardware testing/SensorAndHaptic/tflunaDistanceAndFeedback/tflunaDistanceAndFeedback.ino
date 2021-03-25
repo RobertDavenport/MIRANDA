@@ -13,10 +13,11 @@ TFLI2C tfli2c;
 #define MAX_MOTOR_SPEED 255
 
 
-int16_t tfDistance;   // cm
+int16_t tfDistanceS1;
+int16_t tfDistanceS2;// cm
 uint8_t defaultAddress = 0x10;
-uint8_t tfSensorOne = 0x08;
-uint8_t tfSensorTwo = 0x09;
+uint8_t tfSensorOne = 0x20;
+uint8_t tfSensorTwo = 0x21;
 uint8_t tfSensorThree = 0x0A;
 unsigned char hapticIntensityOne;
 
@@ -31,25 +32,38 @@ void setup() {
   // Initialize the haptic motor's control pin.
   pinMode(HAPTIC_MOTOR_1, OUTPUT);
   pinMode(TF_LUNA_1, OUTPUT);
-  Serial.begin(115200); // Init serial port with baud rate of 115200
+  Serial.begin(115200); // Init serial port with baud rate of 115200  
   //sensorSetup(tfSensorOne, defaultAddress);
   Wire.begin();         // Init wire library
+
+  //One Time Setup for changing TFLuna I2C Addresses.
+  //tfli2c.Set_I2C_Addr(tfSensorTwo, tfSensorOne);
+  //tfli2c.Save_Settings(tfSensorOne);
+  //tfli2c.Soft_Reset(tfSensorOne);
+  //tfli2c.Set_I2C_Addr(tfSensorTwo, defaultAddress);
+  //tfli2c.Save_Settings(defaultAddress);
+  //tfli2c.Soft_Reset(defaultAddress);
   
 }
 
 
 void loop() {
   digitalWrite(TF_LUNA_1, LOW);
-  tfli2c.getData(tfDistance, defaultAddress);
-  Serial.print("Distance: ");
-  Serial.println(tfDistance);
-  feedback(HAPTIC_MOTOR_1,tfDistance);
+  tfli2c.getData(tfDistanceS2, tfSensorTwo);
+  tfli2c.getData(tfDistanceS1, tfSensorOne);
+  Serial.print("Distance SensorOne: ");
+  Serial.println(tfDistanceS1);
+  Serial.print("Distance SensorTwo: ");
+  Serial.println(tfDistanceS2);
+  feedback(HAPTIC_MOTOR_1,tfDistanceS1);
   delay(200);
 }
 
 
 // setup to change sensor address
 void sensorSetup(uint8_t sensorAddress, uint8_t defaultAddress) {
+   Serial.println("sensorAddress: " + String((char *)sensorAddress));
+   Serial.println("defaultAddress: " + defaultAddress);
    tfli2c.Set_I2C_Addr(sensorAddress, defaultAddress);
    tfli2c.Save_Settings(defaultAddress);
    tfli2c.Soft_Reset(defaultAddress);
