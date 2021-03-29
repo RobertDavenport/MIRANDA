@@ -12,50 +12,45 @@ TFLI2C tfli2c;
 #define MIN_MOTOR_SPEED 100
 #define MAX_MOTOR_SPEED 255
 
+// Sensor Addresses
+uint8_t TFSENSOR_LEFT = 0x10;
+uint8_t TFSENSOR_MIDDLE = 0x20;
+uint8_t TFSENSOR_RIGHT = 0x21;
 
-int16_t tfDistanceS1;
-int16_t tfDistanceS2;// cm
-uint8_t defaultAddress = 0x10;
-uint8_t tfSensorOne = 0x20;
-uint8_t tfSensorTwo = 0x21;
-uint8_t tfSensorThree = 0x0A;
+int16_t tfDistanceLeft;
+int16_t tfDistanceMiddle;
+int16_t tfDistanceRight;
+
 unsigned char hapticIntensityOne;
 
-
 // Pinout for haptic unit control.
-const int HAPTIC_MOTOR_1 = 6;
+const int HAPTIC_MOTOR_PINOUT = 6;
 
 // Pinout for sensor enable
-const int TF_LUNA_1 = 10;
+const int TF_LUNA_PINOUT = 10;
 
 void setup() {
   // Initialize the haptic motor's control pin.
-  pinMode(HAPTIC_MOTOR_1, OUTPUT);
-  pinMode(TF_LUNA_1, OUTPUT);
+  pinMode(HAPTIC_MOTOR_PINOUT, OUTPUT);
+  pinMode(TF_LUNA_PINOUT, OUTPUT);
   Serial.begin(115200); // Init serial port with baud rate of 115200  
-  //sensorSetup(tfSensorOne, defaultAddress);
-  Wire.begin();         // Init wire library
-
-  //One Time Setup for changing TFLuna I2C Addresses.
-  //tfli2c.Set_I2C_Addr(tfSensorTwo, tfSensorOne);
-  //tfli2c.Save_Settings(tfSensorOne);
-  //tfli2c.Soft_Reset(tfSensorOne);
-  //tfli2c.Set_I2C_Addr(tfSensorTwo, defaultAddress);
-  //tfli2c.Save_Settings(defaultAddress);
-  //tfli2c.Soft_Reset(defaultAddress);
-  
+  Wire.begin();         // Init wire library 
 }
 
-
 void loop() {
-  digitalWrite(TF_LUNA_1, LOW);
-  tfli2c.getData(tfDistanceS2, tfSensorTwo);
-  tfli2c.getData(tfDistanceS1, tfSensorOne);
-  Serial.print("Distance SensorOne: ");
-  Serial.println(tfDistanceS1);
-  Serial.print("Distance SensorTwo: ");
-  Serial.println(tfDistanceS2);
-  feedback(HAPTIC_MOTOR_1,tfDistanceS1);
+  digitalWrite(TF_LUNA_PINOUT, LOW);
+  tfli2c.getData(tfDistanceLeft, TFSENSOR_LEFT);
+  tfli2c.getData(tfDistanceMiddle, TFSENSOR_MIDDLE);
+  tfli2c.getData(tfDistanceRight, TFSENSOR_RIGHT);
+  Serial.print("Distance Left: ");
+  Serial.println(tfDistanceLeft);
+  Serial.print("Distance Middle: ");
+  Serial.println(tfDistanceMiddle);
+  Serial.print("Distance Right: ");
+  Serial.println(tfDistanceRight);
+  feedback(HAPTIC_MOTOR_PINOUT,tfDistanceLeft);
+  feedback(HAPTIC_MOTOR_PINOUT,tfDistanceMiddle);
+  feedback(HAPTIC_MOTOR_PINOUT,tfDistanceRight);
   delay(200);
 }
 
