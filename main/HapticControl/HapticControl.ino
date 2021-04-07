@@ -1,26 +1,30 @@
-
-// Pinout for haptic unit control.
-const uint8_t HAPTIC_MOTOR_1 = 3;
-const uint8_t HAPTIC_MOTOR_2 = 4;
+char intensity[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
+int intensity_values[8] = {0, 130, 155, 175, 190, 205, 220, 255};
+//int pins[5] = {9, 10, 3, 5, 6};
+int pins[5] = {6, 5, 3, 10, 9};
 
 void setup() {
-  // Initialize the haptic motors' control pins.
-  pinMode(HAPTIC_MOTOR_1, OUTPUT);
-  pinMode(HAPTIC_MOTOR_2, OUTPUT);
-  Serial.begin(9600);
+  for(int i = 0; i<5; i++){
+    pinMode(pins[i], OUTPUT);
+  }
+  Serial.begin(115200);
 }
 
 void loop() {
-  // Checks if data is in the Serial buffer
   if(Serial.available()){
-    byte intensity = Serial.parseInt();
-    Serial.println(intensity); // Echos the input
-    feedback(intensity); // Update the haptic intensity.
+    int vals[5] = {0,0,0,0,0};
+    for(int i = 0; i<5; i++){
+      char c = Serial.read();
+      Serial.println(c);
+      int j = 0;
+      for(j = 0; j < 8; j++){
+        if(c == intensity[j])
+          break; 
+      }
+      vals[i] = intensity_values[j];
+    }
+    for(int i = 0; i<5; i++){
+      analogWrite(pins[i], vals[i]);
+    }
   }
-}
-
-// Writes the passesd intensity to the haptic motors by PWM.
-void feedback(int intensity){
-  analogWrite(HAPTIC_MOTOR_1, intensity);
-  analogWrite(HAPTIC_MOTOR_2, intensity);
 }
