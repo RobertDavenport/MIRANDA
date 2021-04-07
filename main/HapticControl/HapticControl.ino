@@ -35,9 +35,9 @@ void loop() {
     
     // Print profiler
     Serial.print("all : ");
-    Serial.println(TimeProfiler.getProfile("all");
+    Serial.println(TimeProfiler.getProfile("all"));
     Serial.print("one : ");
-    Serial.println(TimeProfiler.getProfile("one");
+    Serial.println(TimeProfiler.getProfile("one"));
     
     for(int i = 0; i<5; i++){
       analogWrite(pins[i], vals[i]);
