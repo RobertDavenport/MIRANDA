@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <TimeProfiler.h>
 #include <WiFi.h>
 #include <AsyncUDP.h>
@@ -69,7 +70,7 @@ void loop() {
     Serial.println(TimeProfiler.getProfile("one"));
     
     for(int i = 0; i<5; i++){
-      analogWrite(pins[i], vals[i]);
+      ledcWrite(pins[i], vals[i]);
     }
     
   }
