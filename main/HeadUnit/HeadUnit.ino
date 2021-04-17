@@ -1,8 +1,17 @@
 #include <Arduino.h>
 #include <TFLI2C.h>
 #include <Wire.h>
+#include <WiFi.h>
+#include <AsyncUDP.h>
 
 TFLI2C tfli2c;
+
+// Wifi Connection Setup
+const char *my_ssid = "esp32_ssid";
+const char *password = "password";
+int port = 1234;
+
+AsyncUDP udp;
 
 // Min and max acceptable values for distance read in the from TF LUNA TOF sensor
 #define MAX_DISTANCE 450
@@ -43,6 +52,10 @@ void setup() {
   //pinMode(TF_LUNA_PINOUT, OUTPUT);
   Serial.begin(115200);
   Wire.begin();
+  
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(my_ssid, password);
+
   //digitalWrite(TF_LUNA_1, LOW); // Powers on the TF Luna
 
   // Initialize the MPU-6050 / GY-521 sensor and take an initial reading.
@@ -55,6 +68,8 @@ void loop() {
   printDistances(distanceReadings);
   computeAngles(initialAngles, currentAngles);
   printValues(initialAngles, currentAngles);
+  // TODO: We will broadcast the final string after area mapping
+  udp.broadcastTo("ABCDEFGH", port);
   delay(150);
 }
 
