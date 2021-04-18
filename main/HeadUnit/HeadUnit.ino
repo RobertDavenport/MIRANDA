@@ -1,8 +1,17 @@
 #include <Arduino.h>
 #include <TFLI2C.h>
 #include <Wire.h>
+#include <WiFi.h>
+#include <AsyncUDP.h>
 
 TFLI2C tfli2c;
+
+// Wifi Connection Setup
+const char *my_ssid = "esp32_ssid";
+const char *password = "password";
+int port = 1234;
+
+AsyncUDP udp;
 
 // Min and max acceptable values for distance read in the from TF LUNA TOF sensor
 #define MAX_DISTANCE 450
@@ -23,6 +32,8 @@ uint8_t TFSENSOR_MIDDLE = 0x20;
 uint8_t TFSENSOR_RIGHT = 0x21;
 // Sensor Array
 uint8_t sensorArray[3] = {TFSENSOR_LEFT, TFSENSOR_MIDDLE, TFSENSOR_RIGHT};
+// temp mapping
+char temp[4];
 
 // Distance Array for sensor Readings
 int16_t distanceReadings[3] = {0,0,0};
@@ -40,6 +51,7 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
   
+
   // Wake the MPU-6050/GY-521 sensor and take an initial reading.
   Wire.beginTransmission(MPU_addr);
   Wire.write(0x6B);
@@ -48,6 +60,11 @@ void setup() {
   // A delay seems to be needed for the initialization when the unit is powered on without code being uploaded
   delay(1000);
   initializeAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
+  
+  // Setup Wifi
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(my_ssid, password);
+ 
   delay(250); 
 }
 
@@ -56,10 +73,27 @@ void loop() {
   printDistances(distanceReadings);
   readAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
   printAccelGyroValues(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
+  tempMapping(distanceReadings, temp);
+  // TODO: We will broadcast the final string after area mapping
+  Serial.println(temp);
+  udp.broadcastTo(temp, port);
+
   delay(150);
 }
 
-
+void tempMapping(int16_t *distanceReadings, char * temp){
+  for(int i = 0; i<3; i++) {    
+    if (distanceReadings[i] < 150) {
+      temp[i] = 'h'; 
+    }
+    else if (distanceReadings[i] < 300) {
+      temp[i] = 'g';      
+    }
+    else {
+      temp[i] = 'f';        
+    }
+  }
+}
 
 
 // Gets distance readings for each sensor in the array and updates the array of distances
