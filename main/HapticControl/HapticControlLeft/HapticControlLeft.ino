@@ -1,6 +1,7 @@
 #include <TimeProfiler.h>
 #include <WiFi.h>
 #include <AsyncUDP.h>
+#include <String.h>
 
 const char * ssid = "esp32_ssid";
 const char * password = "password";
@@ -10,7 +11,7 @@ int intensity_values[8] = {0, 130, 155, 175, 190, 205, 220, 255};
 //int pins[5] = {9, 10, 3, 5, 6};
 int pins[5] = {6, 5, 3, 10, 9};
 int port = 1234;
-char * sensorMappings
+String sensorMappings;
 
 AsyncUDP udp;
 
@@ -37,7 +38,9 @@ void setup() {
           Serial.print("Received data: ");
             Serial.write(packet.data(), packet.length());
             Serial.println();
-            sensorMappings = packet.data().substring(0,3);
+            String sensorMappings((const __FlashStringHelper*) packet.data());
+            sensorMappings = sensorMappings.substring(0,3);
+            Serial.println(sensorMappings);
         });
     }
 }
@@ -60,7 +63,7 @@ void loop() {
             break; 
         }
         vals[i] = intensity_values[j];
-    
+    }
     
     // Print profiler
     Serial.print("all : ");
@@ -70,7 +73,5 @@ void loop() {
     
     for(int i = 0; i<5; i++){
       ledcWrite(pins[i], vals[i]);
-    }
-    
-  }
+    }    
 }
