@@ -27,34 +27,35 @@ uint8_t sensorArray[3] = {TFSENSOR_LEFT, TFSENSOR_MIDDLE, TFSENSOR_RIGHT};
 // Distance Array for sensor Readings
 int16_t distanceReadings[3] = {0,0,0};
 
-// Angle Arrays for Accelerometer readings
-double currentAngles[3] = {0,0,0};
-double initialAngles[3] = {0,0,0};
+// Arrays for Accelerometer readings
+double currentAccelerometer[3] = {0,0,0};
+double initialAccelerometer[3] = {0,0,0};
 
-
-
-//unsigned char hapticIntensityOne;
-
-//const int TF_LUNA_1 = 10; // Controls the power to the TF Luna sensor
-
+// Arrays for Gyroscope readings
+double currentGyroscope[3] = {0,0,0};
+double initialGyroscope[3] = {0,0,0};
 
 
 void setup() {
-  //pinMode(TF_LUNA_PINOUT, OUTPUT);
   Serial.begin(115200);
   Wire.begin();
-  //digitalWrite(TF_LUNA_1, LOW); // Powers on the TF Luna
-
-  // Initialize the MPU-6050 / GY-521 sensor and take an initial reading.
-  initializeSensor(initialAngles, currentAngles);
+  
+  // Wake the MPU-6050/GY-521 sensor and take an initial reading.
+  Wire.beginTransmission(MPU_addr);
+  Wire.write(0x6B);
+  Wire.write(0);
+  Wire.endTransmission(true);
+  // A delay seems to be needed for the initialization when the unit is powered on without code being uploaded
+  delay(1000);
+  initializeAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
   delay(250); 
 }
 
 void loop() {
-  readFromArray(sensorArray, distanceReadings);
+  readLidarArray(sensorArray, distanceReadings);
   printDistances(distanceReadings);
-  computeAngles(initialAngles, currentAngles);
-  printValues(initialAngles, currentAngles);
+  readAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
+  printAccelGyroValues(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
   delay(150);
 }
 
@@ -62,7 +63,7 @@ void loop() {
 
 
 // Gets distance readings for each sensor in the array and updates the array of distances
-void readFromArray(uint8_t *sensorArray, int16_t *distanceReadings) {
+void readLidarArray(uint8_t *sensorArray, int16_t *distanceReadings) {
   for(int i = 0; i<3; i++){
     tfli2c.getData(distanceReadings[i], sensorArray[i]);
   }
@@ -87,50 +88,78 @@ int feedback(int dist){
   return dist;
 }
 
-// Finds the current state of the gyroscope.
-void computeAngles(double * initialAngles, double * currentAngles) {
+// Finds the current state of the Accelerometer and Gyroscope.
+void readAccelGyro(double * initialAngles, double * currentAngles, double * initialGyroscope, double * currentGyroscope) {
   Wire.beginTransmission(MPU_addr); 
   Wire.write(0x3B); 
   Wire.endTransmission(false); 
-  Wire.requestFrom(MPU_addr,14,true); 
+  Wire.requestFrom(MPU_addr,6,true); 
+
+  // Each value is stored in 2 1-byte registers in the sensor. Need to read both into 1 int16 for correct output.
+  int16_t AccelX = Wire.read()<<8|Wire.read(); // reg: 0x3B & 0x3C
+  int16_t AccelY = Wire.read()<<8|Wire.read(); // reg: 0x3D & 0x3E
+  int16_t AccelZ = Wire.read()<<8|Wire.read(); // reg: 0x3F & 0x40
+
+  Wire.write(0x43);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU_addr,6,true);
+
+  int16_t GyroX = Wire.read()<<8|Wire.read(); // reg: 0x43 & 0x44
+  int16_t GyroY = Wire.read()<<8|Wire.read(); // reg: 0x45 & 0x46
+  int16_t GyroZ = Wire.read()<<8|Wire.read(); // reg: 0x47 & 0x48
+
   
-  int16_t AcX = Wire.read()<<8|Wire.read(); // Each value is stored in 2 1-byte registers in the sensor;
-  int16_t AcY = Wire.read()<<8|Wire.read(); // need to read both into 1 int16 for correct output.
-  int16_t AcZ = Wire.read()<<8|Wire.read(); 
-  
-  int16_t xAng = map(AcX,minVal,maxVal,-90,90); 
-  int16_t yAng = map(AcY,minVal,maxVal,-90,90); 
-  int16_t zAng = map(AcZ,minVal,maxVal,-90,90);
+  int16_t AccelAngX = map(AccelX,minVal,maxVal,-90,90); 
+  int16_t AccelAngY = map(AccelY,minVal,maxVal,-90,90); 
+  int16_t AccelAngZ = map(AccelZ,minVal,maxVal,-90,90);
+
+  int16_t GyroAngX = map(GyroX,minVal,maxVal,-90,90); 
+  int16_t GyroAngY = map(GyroY,minVal,maxVal,-90,90); 
+  int16_t GyroAngZ = map(GyroZ,minVal,maxVal,-90,90);
 
   // Find the current rotation (x,y,z) and normalize against the initial rotation state.
-  currentAngles[0] = (RAD_TO_DEG * (atan2(-yAng, -zAng)+PI)) - initialAngles[0]; 
-  currentAngles[1] = (RAD_TO_DEG * (atan2(-xAng, -zAng)+PI)) - initialAngles[1]; 
-  currentAngles[2] = (RAD_TO_DEG * (atan2(-yAng, -xAng)+PI)) - initialAngles[2];
+  currentAccelerometer[0] = (RAD_TO_DEG * (atan2(-AccelAngY, -AccelAngZ)+PI)) - initialAccelerometer[0]; 
+  currentAccelerometer[1] = (RAD_TO_DEG * (atan2(-AccelAngX, -AccelAngZ)+PI)) - initialAccelerometer[1]; 
+  currentAccelerometer[2] = (RAD_TO_DEG * (atan2(-AccelAngY, -AccelAngX)+PI)) - initialAccelerometer[2];
+  currentGyroscope[0] = (RAD_TO_DEG * (atan2(-GyroAngY, -GyroAngZ)+PI)) - initialGyroscope[0]; 
+  currentGyroscope[1] = (RAD_TO_DEG * (atan2(-GyroAngX, -GyroAngZ)+PI)) - initialGyroscope[1]; 
+  currentGyroscope[2] = (RAD_TO_DEG * (atan2(-GyroAngY, -GyroAngX)+PI)) - initialGyroscope[2];
 
 }
 
 // Initializes the gyroscope and takes the initial readings. 
-void initializeSensor(double * initialAngles, double * currentAngles) {
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x6B);
-  Wire.write(0);
-  Wire.endTransmission(true);
+void initializeAccelGyro(double * initialAngles, double * currentAngles, double * initialGyroscope, double * currentGyroscope) {
 
   // Take an initial reading and update initialAngles
-  computeAngles(initialAngles, currentAngles);
+  readAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
   for (int i = 0; i < 3; i++){
-    initialAngles[i] = currentAngles[i];
+    initialAccelerometer[i] = currentAccelerometer[i];
+    initialGyroscope[i] = currentGyroscope[i];
   }
 }
 
-void printValues(double * initialAngles, double * currentAngles) {
+void printAccelGyroValues(double * initialAccelerometer, double * currentAccelerometer, double * initialGyroscope, double * currentGyroscope) {
+  Serial.println("Initial Accelerometer: ");
   for (int i = 0; i < 3; i++){
-    Serial.print(initialAngles[i]);
+    Serial.print(initialAccelerometer[i]);
     Serial.print(" ");
   }
   Serial.println();
+  Serial.println("Current Accelerometer: ");
   for (int i = 0; i < 3; i++){
-    Serial.print(currentAngles[i]);
+    Serial.print(currentAccelerometer[i]);
+    Serial.print(" ");
+  }
+  Serial.println();
+  Serial.println("Initial Gyroscope: ");
+  for (int i = 0; i < 3; i++){
+    Serial.print(initialGyroscope[i]);
+    Serial.print(" ");
+  }
+  Serial.println();
+  Serial.println("Current Gyroscope: ");
+  for (int i = 0; i < 3; i++){
+    Serial.print(currentGyroscope[i]);
     Serial.print(" ");
   }
   Serial.println();
