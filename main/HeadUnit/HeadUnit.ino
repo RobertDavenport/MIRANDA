@@ -32,6 +32,8 @@ uint8_t TFSENSOR_MIDDLE = 0x20;
 uint8_t TFSENSOR_RIGHT = 0x21;
 // Sensor Array
 uint8_t sensorArray[3] = {TFSENSOR_LEFT, TFSENSOR_MIDDLE, TFSENSOR_RIGHT};
+// temp mapping
+char temp[4];
 
 // Distance Array for sensor Readings
 int16_t distanceReadings[3] = {0,0,0};
@@ -55,7 +57,8 @@ void setup() {
   
   WiFi.mode(WIFI_AP);
   WiFi.softAP(my_ssid, password);
-
+  delay(100);
+  
   //digitalWrite(TF_LUNA_1, LOW); // Powers on the TF Luna
 
   // Initialize the MPU-6050 / GY-521 sensor and take an initial reading.
@@ -68,12 +71,26 @@ void loop() {
   printDistances(distanceReadings);
   computeAngles(initialAngles, currentAngles);
   printValues(initialAngles, currentAngles);
+  tempMapping(distanceReadings, temp);
   // TODO: We will broadcast the final string after area mapping
-  udp.broadcastTo("ABCDEFGH", port);
+  Serial.println(temp);
+  udp.broadcastTo(temp, port);
   delay(150);
 }
 
-
+void tempMapping(int16_t *distanceReadings, char * temp){
+  for(int i = 0; i<3; i++) {    
+    if (distanceReadings[i] < 150) {
+      temp[i] = 'h'; 
+    }
+    else if (distanceReadings[i] < 300) {
+      temp[i] = 'g';      
+    }
+    else {
+      temp[i] = 'f';        
+    }
+  }
+}
 
 
 // Gets distance readings for each sensor in the array and updates the array of distances
