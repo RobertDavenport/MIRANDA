@@ -183,7 +183,7 @@ void control( void * params ) {
     newCommandDist[4] = sensors.lidar[2];
     for(int i = 0; i < NUM_HAPTICS; i++) {
       //Serial.print(newCommandDist[i]);Serial.print("\t");
-      char mapping = HAPTIC_MAPPINGS_CHAR[0];
+      char mapping = 'h';
       for(int j = 0; j < HAPTIC_CONTROL_LEVELS; j++){
         if(newCommandDist[i] >= HAPTIC_MAPPINGS_DIST[j][0] && newCommandDist[i] < HAPTIC_MAPPINGS_DIST[j][1]) {
           mapping = HAPTIC_MAPPINGS_CHAR[j];
