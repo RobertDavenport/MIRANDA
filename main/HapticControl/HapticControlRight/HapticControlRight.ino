@@ -7,8 +7,7 @@ const char * ssid = "esp32_ssid";
 const char * password = "password";
 
 char intensity[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
-int intensity_values[8] = {0, 130, 155, 175, 190, 205, 220, 255};
-//int pins[5] = {9, 10, 3, 5, 6};
+int intensity_values[8] = {255, 220, 205, 190, 175, 155, 130, 0};
 int pins[3] = {12, 13, 14};
 int port = 1234;
 String sensorMappings;
@@ -39,7 +38,7 @@ void setup() {
       //Serial.write(packet.data(), packet.length());
       //Serial.println();
       String getData((const __FlashStringHelper*) packet.data());
-      sensorMappings = sensorMappings.substring(4,8);
+      sensorMappings = sensorMappings.substring(2,4);
       //Serial.println(sensorMappings);
     });
   }
@@ -55,7 +54,7 @@ void loop() {
     
     //SCOPED_TIMEPROFILE(all); // begin scoped profiler
     Serial.println(sensorMappings);
-    int vals[4] = {0,0,0,0};
+    int vals[3] = {0,0,0};
     for(int i = 0; i<3; i++){
         char c = sensorMappings.charAt(i);
         //Serial.println(c);
