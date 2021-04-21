@@ -1,200 +1,433 @@
-#include <Arduino.h>
+#include <math.h>
+#include <I2Cdev.h>
 #include <TFLI2C.h>
+#include <MPU6050.h>
 #include <Wire.h>
-#include <WiFi.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <AsyncUDP.h>
+#include <WiFi.h>
 
-TFLI2C tfli2c;
+/* Determines if accelermeter will be used
+   to account for movement when mapping the
+   environment. */
+#define MAP_AREA_WITHOUT_MOVEMENT
+
+// Settings for area mapping structure
+#define DPI 6
+#define RADIAL_SEGMENTS 60
+#define EMPTY -1
+
+// Indices for sensor values
+#define GYRO_X 0
+#define GYRO_Y 1
+#define GYRO_Z 2
+#define ACCL_X 0
+#define ACCL_Y 1
+#define ACCL_Z 2
+
+// Constants
+#define ACCL_X_OFFSET 1.02
+#define ACCL_Y_OFFSET 0.0005
+#define ACCL_Z_OFFSET 0.155
+#define NUM_LIDAR 3
+#define NUM_HAPTICS 5
+#define HAPTIC_CONTROL_LEVELS 8
+
+/* Number of degrees in a cone that each haptic
+   motor will be mapped to. */
+#define DPH (DPI*2)
+#define MAX_DIST 100.0
+#define MIN_DIST 0.0
+#define MAX_READABLE_DIST 450.0
+#define MIN_READABLE_DIST 0.0
+
+// Math macros and definitions
+#define PI 3.14159265
+#define radians(d) (d*0.0174533)
+#define degrees(r) (r*57.2958)
+#define nearestK(n,k) (int)round(n/(float)k)
+#define normalize(n) (((float)n-MIN_READABLE_DIST)/(MAX_READABLE_DIST - MIN_READABLE_DIST))*(MAX_DIST-MIN_DIST)+MIN_DIST;
+
+// Data structures for area mapping and haptic control.
+struct Sensors {
+  float lidar[NUM_LIDAR];
+  float accel[3];
+  float gyro[3] = {0,0,0};
+  bool lock = false;
+};
+struct AreaMap {
+  float angles[RADIAL_SEGMENTS];
+  float distances[RADIAL_SEGMENTS];
+  bool lock = false;
+};
+struct HapticCommand {
+  //char haptics[NUM_HAPTICS+1] = "aaaaa";
+  char *haptics;
+  bool lock;
+};
+
+const uint8_t lidarAddresses[3] = {0x10, 0x20, 0x21};
+const float lidarAngles[NUM_LIDAR] = {345, 0, 15};
+const float LIDAR_WIDTH = 30;
+const float gyroOffset[3] = {0.0035025, 0.0025, 0.0019};
+const float hapticOffsetAngles[NUM_HAPTICS] = {-30,-15,0,15,30};
+
+float gyro[3];
+
+// Definitions for haptic control intensity-to-distance mappings
+const char HAPTIC_MAPPINGS_CHAR[HAPTIC_CONTROL_LEVELS] = {'a','b','c','d','e','f','g','h'};
+const float HAPTIC_MAPPINGS_DIST[HAPTIC_CONTROL_LEVELS][2] = {{0,10},
+                                                        {10,15},
+                                                        {15,20},
+                                                        {20,25},
+                                                        {25,30},
+                                                        {35,40},
+                                                        {40,45},
+                                                        {45,MAX_DIST+1}};
+
+struct AreaMap areaMap; // Perm. struct for storing mapped area.
+struct AreaMap tempMap; // Temp. struct for updating mapped area.
+struct Sensors sensors; // Stores the rt-database of sensor values.
+struct HapticCommand command; // Stores most recent haptic command.
 
 // Wifi Connection Setup
 const char *my_ssid = "esp32_ssid";
 const char *password = "password";
-int port = 1234;
+int PORT = 1234;
 
+unsigned long prevTime = 0;
+
+Adafruit_MPU6050 mpu;
+TFLI2C tfli2c;
 AsyncUDP udp;
 
-// Min and max acceptable values for distance read in the from TF LUNA TOF sensor
-#define MAX_DISTANCE 450
-#define MIN_DISTANCE 1
-
-// Min and max motor speed for the distance-to-intensity mappings
-#define MIN_MOTOR_SPEED 100
-#define MAX_MOTOR_SPEED 255
-
-// Define variables for accelerometer
-#define MPU_addr 0x68
-#define minVal 265
-#define maxVal 402
-
-// Sensor Addresses
-uint8_t TFSENSOR_LEFT = 0x10;
-uint8_t TFSENSOR_MIDDLE = 0x20;
-uint8_t TFSENSOR_RIGHT = 0x21;
-// Sensor Array
-uint8_t sensorArray[3] = {TFSENSOR_LEFT, TFSENSOR_MIDDLE, TFSENSOR_RIGHT};
-// temp mapping
-char temp[4];
-
-// Distance Array for sensor Readings
-int16_t distanceReadings[3] = {0,0,0};
-
-// Arrays for Accelerometer readings
-double currentAccelerometer[3] = {0,0,0};
-double initialAccelerometer[3] = {0,0,0};
-
-// Arrays for Gyroscope readings
-double currentGyroscope[3] = {0,0,0};
-double initialGyroscope[3] = {0,0,0};
-
+// Core-assigned task handles
+TaskHandle_t AreaMappingTask;
+TaskHandle_t ControlTask;
 
 void setup() {
-  Serial.begin(115200);
+  command.haptics = "aaaaa";
+  //Serial.begin(115200);  
   Wire.begin();
-  
 
-  // Wake the MPU-6050/GY-521 sensor and take an initial reading.
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x6B);
-  Wire.write(0);
-  Wire.endTransmission(true);
-  // A delay seems to be needed for the initialization when the unit is powered on without code being uploaded
-  delay(1000);
-  initializeAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
-  
+  mpu.begin();
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
   // Setup Wifi
   WiFi.mode(WIFI_AP);
   WiFi.softAP(my_ssid, password);
- 
-  delay(250); 
+
+  // Control (networking and sensor reading) performed on core 0
+  xTaskCreatePinnedToCore(
+              control,        // Function
+              "Control",      // Name
+              16384,          // Stack size
+              NULL,           // Parameters
+              2,              // Priority
+              &ControlTask,   // TaskHandle
+              0);             // Core No.
+
+  
+  // Area mapping performed on core 1
+  /*
+  xTaskCreatePinnedToCore(
+              areaMapping,      // Function
+              "AreaMapping",    // Name
+              16384,            // Stack size
+              NULL,             // Parameters
+              2,                // Priority
+              &AreaMappingTask, // TaskHandle
+              1);               // Core No.
+  */
+  prevTime = millis();
+  delay(1000);
 }
 
 void loop() {
-  readLidarArray(sensorArray, distanceReadings);
-  printDistances(distanceReadings);
-  readAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
-  printAccelGyroValues(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
-  tempMapping(distanceReadings, temp);
-  // TODO: We will broadcast the final string after area mapping
-  Serial.println(temp);
-  udp.broadcastTo(temp, port);
-
-  delay(150);
 }
 
-void tempMapping(int16_t *distanceReadings, char * temp){
-  for(int i = 0; i<3; i++) {    
-    if (distanceReadings[i] < 150) {
-      temp[i] = 'h'; 
+void control( void * params ) {
+  while(true) {
+
+    /* Lock the sensor struct for copying */
+    while(sensors.lock) { delay(1); }
+    sensors.lock = true;
+    Sensors temp = sensors;
+    sensors.lock = false;
+
+    /* Update the sensor struct */
+    temp = readSensors(temp);
+
+    /* Lock and replace the sensor struct */
+    while(sensors.lock) { delay(1); }
+    sensors.lock = true;
+    sensors = temp;
+    sensors.lock = false;
+
+    /* Lock the haptic command for copying */
+    /*
+    while(command.lock) { delay(1); }
+    command.lock = true;
+    HapticCommand cmd = command;
+    command.lock = false;
+    */
+
+    char newCommand[NUM_HAPTICS+1] = "aaaaa";
+    float newCommandDist[NUM_HAPTICS] = {0,0,0,0,0};
+    newCommandDist[0] = sensors.lidar[0];
+    newCommandDist[1] = (sensors.lidar[0] + sensors.lidar[1])/2.0;
+    newCommandDist[2] = sensors.lidar[1];
+    newCommandDist[3] = (sensors.lidar[1] + sensors.lidar[2])/2.0;
+    newCommandDist[4] = sensors.lidar[2];
+    for(int i = 0; i < NUM_HAPTICS; i++) {
+      //Serial.print(newCommandDist[i]);Serial.print("\t");
+      char mapping = 'h';
+      for(int j = 0; j < HAPTIC_CONTROL_LEVELS; j++){
+        if(newCommandDist[i] >= HAPTIC_MAPPINGS_DIST[j][0] && newCommandDist[i] < HAPTIC_MAPPINGS_DIST[j][1]) {
+          mapping = HAPTIC_MAPPINGS_CHAR[j];
+          break;
+        }
+      }
+      newCommand[i] = mapping;
     }
-    else if (distanceReadings[i] < 300) {
-      temp[i] = 'g';      
-    }
-    else {
-      temp[i] = 'f';        
-    }
+    //Serial.println();
+    command.haptics = newCommand;
+    udpBroadcast(command);
+    delay(125);
   }
 }
 
+// Area Mapping
+void areaMapping( void * params ) {
 
-// Gets distance readings for each sensor in the array and updates the array of distances
-void readLidarArray(uint8_t *sensorArray, int16_t *distanceReadings) {
-  for(int i = 0; i<3; i++){
-    tfli2c.getData(distanceReadings[i], sensorArray[i]);
+  while(true) {
+    /* Wait for sensors data to be unlocked
+      for use by this thread. */
+    //while(sensors.lock) { delay(1); }
+
+    /* Temporarily lock the sensor data
+      for use by this thread. The data
+      is copied into a temporary struct
+      because this function takes a long
+      time to execute. */
+    //sensors.lock = true;
+    //struct Sensors tempSensors;
+    //tempSensors = sensors;
+    //sensors.lock = false;
+    
+    // Normalize lidar values based on vertical angle
+    //tempSensors = normalizeDistances(tempSensors);
+    
+    //updateMapDistances(tempSensors);
+    //updateHapticCommand(tempSensors);
+    //delay(75);
   }
 }
 
-// prints Distance readings to serial
-void printDistances(int16_t *distanceReadings) {
-  Serial.print("Left: ");
-  Serial.println(distanceReadings[0]);
-  Serial.print("Middle: ");
-  Serial.println(distanceReadings[1]);
-  Serial.print("Right: ");
-  Serial.println(distanceReadings[2]);
+/* ~~~~~~~ Misc functions ~~~~~~~ */
+float getDeltaTime() {
+  unsigned long nt = millis();
+  float dt = (nt - prevTime) * 0.001;
+  prevTime = nt;
+  return dt;
 }
 
-// Maps the read-in distance value to the range of possible distance values normalized to 
-// the range of possible motor speeds.
-int feedback(int dist){
-  if(dist <= MIN_DISTANCE){return 0;} // Distance outside of min acceptable range.
-  dist = min(MAX_DISTANCE, dist);
-  dist = map(dist, MIN_DISTANCE, MAX_DISTANCE, MAX_MOTOR_SPEED, MIN_MOTOR_SPEED);
-  return dist;
+/* ~~~~~~~ Area mapping functions ~~~~~~~ */
+inline void angleMagitudeToComponent( float angle, float magnitude, float * coords ) {
+  coords[0] = cosf(radians(angle)) * magnitude;
+  coords[1] = sinf(radians(angle)) * magnitude;
 }
 
-// Finds the current state of the Accelerometer and Gyroscope.
-void readAccelGyro(double * initialAngles, double * currentAngles, double * initialGyroscope, double * currentGyroscope) {
-  Wire.beginTransmission(MPU_addr); 
-  Wire.write(0x3B); 
-  Wire.endTransmission(false); 
-  Wire.requestFrom(MPU_addr,6,true); 
+inline void componentToAngleMagnitude( float x, float z, float * vec ) {
+  vec[0] = degrees(atan2f(z,x));
+  vec[1] = sqrtf((x * x)+(z * z));
+  if(vec[0] < 0) { vec[0] += 360; }
+}
 
-  // Each value is stored in 2 1-byte registers in the sensor. Need to read both into 1 int16 for correct output.
-  int16_t AccelX = Wire.read()<<8|Wire.read(); // reg: 0x3B & 0x3C
-  int16_t AccelY = Wire.read()<<8|Wire.read(); // reg: 0x3D & 0x3E
-  int16_t AccelZ = Wire.read()<<8|Wire.read(); // reg: 0x3F & 0x40
+// Update Mapping Distances
+void updateMapDistances(Sensors s) {
+  for(int i = 0; i < NUM_LIDAR; i++) {
+    float angle = degrees(sensors.gyro[GYRO_Y]) + hapticOffsetAngles[i];
+    Serial.println(angle);
+    if(angle > 360) {
+      angle = angle - 360;
+    }
+    if(angle < 0) {
+      angle = 360 - angle;
+    }
+    int index = nearestK(angle, DPI) % RADIAL_SEGMENTS;
+    Serial.print(angle);Serial.print("\t");Serial.println(s.lidar[i]);
+    areaMap.angles[index] = fmodf(angle, 360);
+    areaMap.distances[index] = s.lidar[i];
+  }
+}
 
-  Wire.write(0x43);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_addr,6,true);
+// Normalize Distance data
+Sensors normalizeDistances(Sensors s) {
+  float relativeAngle = cosf(radians(s.gyro[GYRO_X]));
+  for(int i = 0; i < NUM_LIDAR; i++) {
+    s.lidar[i] = s.lidar[i] * relativeAngle;
+  }
+  return s;
+}
 
-  int16_t GyroX = Wire.read()<<8|Wire.read(); // reg: 0x43 & 0x44
-  int16_t GyroY = Wire.read()<<8|Wire.read(); // reg: 0x45 & 0x46
-  int16_t GyroZ = Wire.read()<<8|Wire.read(); // reg: 0x47 & 0x48
-
+#ifndef MAP_AREA_WITHOUT_MOVEMENT
+// Update Area Mapping
+void updateMapLocation(Sensors s) {
   
-  int16_t AccelAngX = map(AccelX,minVal,maxVal,-90,90); 
-  int16_t AccelAngY = map(AccelY,minVal,maxVal,-90,90); 
-  int16_t AccelAngZ = map(AccelZ,minVal,maxVal,-90,90);
+  // Return if there was no movement to update.
+  if(s.accel[ACCL_X] == 0 && s.accel[ACCL_Z] == 0) { return; }
 
-  int16_t GyroAngX = map(GyroX,minVal,maxVal,-90,90); 
-  int16_t GyroAngY = map(GyroY,minVal,maxVal,-90,90); 
-  int16_t GyroAngZ = map(GyroZ,minVal,maxVal,-90,90);
+  for(int i = 0; i < RADIAL_SEGMENTS; i ++) {
+    tempMap.angles[i] = i*DPI;
+    tempMap.distances[i] = EMPTY;
+  }
 
-  // Find the current rotation (x,y,z) and normalize against the initial rotation state.
-  currentAccelerometer[0] = (RAD_TO_DEG * (atan2(-AccelAngY, -AccelAngZ)+PI)) - initialAccelerometer[0]; 
-  currentAccelerometer[1] = (RAD_TO_DEG * (atan2(-AccelAngX, -AccelAngZ)+PI)) - initialAccelerometer[1]; 
-  currentAccelerometer[2] = (RAD_TO_DEG * (atan2(-AccelAngY, -AccelAngX)+PI)) - initialAccelerometer[2];
-  currentGyroscope[0] = (RAD_TO_DEG * (atan2(-GyroAngY, -GyroAngZ)+PI)) - initialGyroscope[0]; 
-  currentGyroscope[1] = (RAD_TO_DEG * (atan2(-GyroAngX, -GyroAngZ)+PI)) - initialGyroscope[1]; 
-  currentGyroscope[2] = (RAD_TO_DEG * (atan2(-GyroAngY, -GyroAngX)+PI)) - initialGyroscope[2];
+  for(int i = 0; i < RADIAL_SEGMENTS; i ++) {
+    if(areaMap.distances[i] <= 0) { continue; }
 
+    float angle = fmodf(areaMap.angles[i] + 180, 360);
+    float dist = areaMap.distances[i];
+
+    float componentVector[2];
+    angleMagitudeToComponent(angle, dist, componentVector);
+    componentVector[0] += s.accel[ACCL_Z];
+    componentVector[0] += s.accel[ACCL_X];
+
+    float amVector[2];
+    componentToAngleMagnitude(componentVector[0], componentVector[2],
+                              amVector);
+    
+    int index = ((int)round(amVector[0] / DPI)) % RADIAL_SEGMENTS;
+    if(tempMap.distances[i] == EMPTY || (tempMap.distances[i] > amVector[1] && tempMap.distances[i] != EMPTY)) {
+      tempMap.angles[index] = amVector[0];
+      tempMap.distances[index] = amVector[1];
+    }
+  }
+
+  for(int i = 0; i < RADIAL_SEGMENTS; i ++) {
+    areaMap.angles[i] = tempMap.angles[i];
+    areaMap.distances[i] = tempMap.distances[i];
+  } 
+  
+  // Swap tempMap and areaMap w/ pointers, needs testing.
+  /*
+  struct AreaMap *temp;
+  temp = &areaMap;
+  areaMap = tempMap;
+  tempMap = temp;
+  */
 }
 
-// Initializes the gyroscope and takes the initial readings. 
-void initializeAccelGyro(double * initialAngles, double * currentAngles, double * initialGyroscope, double * currentGyroscope) {
+// Normalize Accelermeter
+Sensors normalizeAccelermeter(Sensors s) {
+  float acclVector[2];
+  componentToAngleMagnitude(s.accel[ACCL_X], s.accel[ACCL_Z], acclVector);
+  acclVector[0] = fmodf(acclVector[0] + s.gyro[GYRO_X], 360);
+  float acclComps[2];
+  angleMagitudeToComponent(acclVector[0], acclVector[1], acclComps);
+  s.accel[ACCL_X] = acclComps[0];
+  s.accel[ACCL_Z] = acclComps[1];
+  return s;
+}
+#endif
 
-  // Take an initial reading and update initialAngles
-  readAccelGyro(initialAccelerometer, currentAccelerometer, initialGyroscope, currentGyroscope);
-  for (int i = 0; i < 3; i++){
-    initialAccelerometer[i] = currentAccelerometer[i];
-    initialGyroscope[i] = currentGyroscope[i];
+// Update Haptic Data
+void updateHapticCommand(Sensors s) {
+    char newCommand[NUM_HAPTICS+1] = "aaaaa";
+
+    for(int i = 0; i < NUM_HAPTICS; i++) {
+
+      float angle = degrees(sensors.gyro[GYRO_Y]) + hapticOffsetAngles[i];
+      if(angle > 360) {
+        angle = angle - 360;
+      }
+      if(angle < 0) {
+        angle = 360 - angle;
+      }
+
+      float dist = areaDistanceQuery(angle, DPH);
+      char mapping = HAPTIC_MAPPINGS_CHAR[0];
+      for(int j = 0; j < HAPTIC_CONTROL_LEVELS; j++){
+        if(dist >= HAPTIC_MAPPINGS_DIST[j][0] && dist < HAPTIC_MAPPINGS_DIST[j][1]) {
+          mapping = HAPTIC_MAPPINGS_CHAR[j];
+          break;
+        }
+      }
+      newCommand[i] = mapping;
+    }
+
+
+    //hapticOffsetAngles
+
+    /* Wait for command data to be unlocked
+      for use by this thread. */
+    while(command.lock) { delay(1); }
+    command.lock = true;
+    command.haptics = newCommand;
+    command.lock = false;
+}
+
+// Get Area Distance
+float areaDistanceQuery(float angle, float coneWidth) {
+  float totalDist = 0;
+  int numReads = 0;
+
+  int indexStart = nearestK(angle-coneWidth, DPI) % RADIAL_SEGMENTS;
+  int indexEnd = indexStart + (int)coneWidth/DPI;
+
+  for(int i = indexStart; i <= indexEnd; i++){
+    // Account for overflow, e.g. range [350, 370] = [350, 10]
+    int trueIndex = i % RADIAL_SEGMENTS;
+    if(areaMap.distances[trueIndex] > 0) {
+      totalDist += areaMap.distances[trueIndex];
+      numReads += 1;
+    }
+  }
+
+  return (totalDist/(float)numReads);
+}
+
+/* ~~~~~~~ Sensor reading functions ~~~~~~~ */
+void getGyroAngles(float * gyro, sensors_event_t gevent, float deltaTime) {
+  gyro[2] = updateAngle(gyro[2], gyroOffset[2], gevent.gyro.x, deltaTime);
+  gyro[1] = updateAngle(gyro[1], gyroOffset[1], gevent.gyro.y, deltaTime);
+  gyro[0] = updateAngle(gyro[0], gyroOffset[0], gevent.gyro.z, deltaTime);
+}
+
+float updateAngle(float ang, float offset, float upd, float dt){
+  ang = ang + offset + upd * dt;
+  if(ang > 2*PI)
+    ang = ang - 2*PI;
+  if(ang < 0)
+    ang = 2*PI - ang;
+  return ang;
+}
+
+/* ~~~~~~~ Control functions ~~~~~~~ */
+// Read Sensor Data
+Sensors readSensors(Sensors old) {
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+  float dt = getDeltaTime();
+  getGyroAngles(old.gyro, g, dt);
+  readLidarArray(old.lidar);
+  return old;
+}
+
+// Read from Lidar Array
+void readLidarArray(float * lidar) {
+  for(int i = 0; i<3; i++){
+    int16_t tempDistance;
+    tfli2c.getData(tempDistance, lidarAddresses[i]);
+    lidar[i] = normalize(tempDistance);
   }
 }
 
-void printAccelGyroValues(double * initialAccelerometer, double * currentAccelerometer, double * initialGyroscope, double * currentGyroscope) {
-  Serial.println("Initial Accelerometer: ");
-  for (int i = 0; i < 3; i++){
-    Serial.print(initialAccelerometer[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
-  Serial.println("Current Accelerometer: ");
-  for (int i = 0; i < 3; i++){
-    Serial.print(currentAccelerometer[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
-  Serial.println("Initial Gyroscope: ");
-  for (int i = 0; i < 3; i++){
-    Serial.print(initialGyroscope[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
-  Serial.println("Current Gyroscope: ");
-  for (int i = 0; i < 3; i++){
-    Serial.print(currentGyroscope[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
+// Broadcast haptic data via UDP
+void udpBroadcast(HapticCommand cmd) {
+  //Serial.println(cmd.haptics);
+  udp.broadcastTo(cmd.haptics,PORT);
 }
