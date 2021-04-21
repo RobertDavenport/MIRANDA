@@ -108,7 +108,7 @@ TaskHandle_t ControlTask;
 
 void setup() {
   command.haptics = "aaaaa";
-  //Serial.begin(115200);
+  //Serial.begin(115200);  
   Wire.begin();
 
   mpu.begin();
@@ -199,6 +199,7 @@ void control( void * params ) {
   }
 }
 
+// Area Mapping
 void areaMapping( void * params ) {
 
   while(true) {
@@ -245,6 +246,7 @@ inline void componentToAngleMagnitude( float x, float z, float * vec ) {
   if(vec[0] < 0) { vec[0] += 360; }
 }
 
+// Update Mapping Distances
 void updateMapDistances(Sensors s) {
   for(int i = 0; i < NUM_LIDAR; i++) {
     float angle = degrees(sensors.gyro[GYRO_Y]) + hapticOffsetAngles[i];
@@ -262,6 +264,7 @@ void updateMapDistances(Sensors s) {
   }
 }
 
+// Normalize Distance data
 Sensors normalizeDistances(Sensors s) {
   float relativeAngle = cosf(radians(s.gyro[GYRO_X]));
   for(int i = 0; i < NUM_LIDAR; i++) {
@@ -271,9 +274,9 @@ Sensors normalizeDistances(Sensors s) {
 }
 
 #ifndef MAP_AREA_WITHOUT_MOVEMENT
+// Update Area Mapping
 void updateMapLocation(Sensors s) {
   
-
   // Return if there was no movement to update.
   if(s.accel[ACCL_X] == 0 && s.accel[ACCL_Z] == 0) { return; }
 
@@ -317,6 +320,8 @@ void updateMapLocation(Sensors s) {
   tempMap = temp;
   */
 }
+
+// Normalize Accelermeter
 Sensors normalizeAccelermeter(Sensors s) {
   float acclVector[2];
   componentToAngleMagnitude(s.accel[ACCL_X], s.accel[ACCL_Z], acclVector);
@@ -329,6 +334,7 @@ Sensors normalizeAccelermeter(Sensors s) {
 }
 #endif
 
+// Update Haptic Data
 void updateHapticCommand(Sensors s) {
     char newCommand[NUM_HAPTICS+1] = "aaaaa";
 
@@ -364,6 +370,7 @@ void updateHapticCommand(Sensors s) {
     command.lock = false;
 }
 
+// Get Area Distance
 float areaDistanceQuery(float angle, float coneWidth) {
   float totalDist = 0;
   int numReads = 0;
@@ -400,6 +407,7 @@ float updateAngle(float ang, float offset, float upd, float dt){
 }
 
 /* ~~~~~~~ Control functions ~~~~~~~ */
+// Read Sensor Data
 Sensors readSensors(Sensors old) {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
@@ -409,6 +417,7 @@ Sensors readSensors(Sensors old) {
   return old;
 }
 
+// Read from Lidar Array
 void readLidarArray(float * lidar) {
   for(int i = 0; i<3; i++){
     int16_t tempDistance;
@@ -417,6 +426,7 @@ void readLidarArray(float * lidar) {
   }
 }
 
+// Broadcast haptic data via UDP
 void udpBroadcast(HapticCommand cmd) {
   //Serial.println(cmd.haptics);
   udp.broadcastTo(cmd.haptics,PORT);
