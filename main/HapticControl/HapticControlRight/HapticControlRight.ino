@@ -7,10 +7,10 @@ const char * ssid = "esp32_ssid";
 const char * password = "password";
 
 char intensity[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
-int intensity_values[8] = {255, 220, 205, 190, 175, 155, 130, 0};
-int pins[3] = {12, 13, 14};
+int intensity_values[8] = {255, 220, 205, 190, 175, 155, 0, 0};
+int pins[3] = {13, 12, 14};
 int port = 1234;
-String sensorMappings;
+char * sensorMappings;
 
 AsyncUDP udp;
 
@@ -34,11 +34,10 @@ void setup() {
 
   if(udp.listen(port)) {
     udp.onPacket([](AsyncUDPPacket packet) {
-      //Serial.print("Received data: ");
-      //Serial.write(packet.data(), packet.length());
-      //Serial.println();
-      String getData((const __FlashStringHelper*) packet.data());
-      sensorMappings = sensorMappings.substring(2,4);
+      Serial.print("Received data: ");
+      Serial.write(packet.data(), packet.length());
+      Serial.println();
+      sensorMappings = (char * )packet.data();
       //Serial.println(sensorMappings);
     });
   }
@@ -48,15 +47,14 @@ void loop() {
 
 
     delay(100);
-    udp.broadcastTo("A message for the server from the client.", port);
     //TIMEPROFILE_BEGIN(one); // profiler
   
     
     //SCOPED_TIMEPROFILE(all); // begin scoped profiler
     Serial.println(sensorMappings);
     int vals[3] = {0,0,0};
-    for(int i = 0; i<3; i++){
-        char c = sensorMappings.charAt(i);
+    for(int i = 2; i<5; i++){
+        char c = sensorMappings[i];
         //Serial.println(c);
         //TIMEPROFILE_END(one); // end "one"
         int j = 0;
@@ -75,5 +73,5 @@ void loop() {
     
     for(int i = 0; i<3; i++){
       analogWrite(pins[i], vals[i]);
-    }    
-}
+    }  
+}  
