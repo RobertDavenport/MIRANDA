@@ -7,6 +7,8 @@
 #include <Adafruit_Sensor.h>
 #include <AsyncUDP.h>
 #include <WiFi.h>
+#include <String.h>
+#include <sstream>
 
 /* Determines if accelermeter will be used
    to account for movement when mapping the
@@ -172,7 +174,15 @@ void control( void * params ) {
 
     Serial.println(cmd.haptics);
     udpBroadcast(cmd);
-    delay(125);
+
+    String sout = String(temp.lidar[0]) + "\t" + String(temp.lidar[1]) + "\t" + String(temp.lidar[2]) + "\t" +
+                        String(temp.gyro[0]) + "\t" + String(temp.gyro[1]) + "\t" + String(temp.gyro[2]) + "\t" +
+                        "0\t0\t0\0";
+    char buff[sout.length()];
+    sout.toCharArray(buff, sout.length());
+    char * bp = buff;
+    udp.broadcastTo(bp,2005);
+    delay(75);
   }
 }
 
@@ -322,13 +332,17 @@ void updateHapticCommand(Sensors s) {
       }
       float dist = areaDistanceQuery(angle, DPH);
       char mapping = HAPTIC_MAPPINGS_CHAR[HAPTIC_CONTROL_LEVELS-1];
-      for(int j = 0; j < HAPTIC_CONTROL_LEVELS; j++){
-        if(dist >= HAPTIC_MAPPINGS_DIST[j][0] && dist < HAPTIC_MAPPINGS_DIST[j][1]) {
-          mapping = HAPTIC_MAPPINGS_CHAR[j];
-          break;
+      if(dist == 0) { newCommand[i] = mapping; }
+      else {
+        for(int j = 0; j < HAPTIC_CONTROL_LEVELS; j++){
+          if(dist >= HAPTIC_MAPPINGS_DIST[j][0] && dist < HAPTIC_MAPPINGS_DIST[j][1]) {
+            mapping = HAPTIC_MAPPINGS_CHAR[j];
+            break;
+          }
         }
+        
+        newCommand[i] = mapping;
       }
-      newCommand[i] = mapping;
     }
     /* Wait for command data to be unlocked
       for use by this thread. */
