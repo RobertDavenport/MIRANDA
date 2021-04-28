@@ -38,6 +38,7 @@ void setup() {
       Serial.write(packet.data(), packet.length());
       Serial.println();
       sensorMappings = (char * )packet.data();
+      sensorMappings += 2;
       //Serial.println(sensorMappings);
     });
   }
