@@ -54,7 +54,7 @@ void loop() {
     //SCOPED_TIMEPROFILE(all); // begin scoped profiler
     Serial.println(sensorMappings);
     int vals[3] = {0,0,0};
-    for(int i = 2; i<5; i++){
+    for(int i = 0; i<2; i++){
         char c = sensorMappings[i];
         //Serial.println(c);
         //TIMEPROFILE_END(one); // end "one"
