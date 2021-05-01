@@ -176,8 +176,8 @@ void control( void * params ) {
     udpBroadcast(cmd);
 
     //String sout = String(temp.lidar[0]) + "\t" + String(temp.lidar[1]) + "\t" + String(temp.lidar[2]) + "\t" +
-                        String(temp.gyro[0]) + "\t" + String(temp.gyro[1]) + "\t" + String(temp.gyro[2]) + "\t" +
-                        "0\t0\t0\0";
+    //                    String(temp.gyro[0]) + "\t" + String(temp.gyro[1]) + "\t" + String(temp.gyro[2]) + "\t" +
+    //                    "0\t0\t0\0";
     //char buff[sout.length()];
     //Sout.toCharArray(buff, sout.length());
     //char * bp = buff;
