@@ -30,48 +30,29 @@ void setup() {
     Serial.print(".");
     delay(500);
   }
-  Serial.println("");
+}
 
+void loop() {
   if(udp.listen(port)) {
     udp.onPacket([](AsyncUDPPacket packet) {
       Serial.print("Received data: ");
       Serial.write(packet.data(), packet.length());
       Serial.println();
       sensorMappings = (char * )packet.data();
-      //Serial.println(sensorMappings);
+      Serial.println(sensorMappings);
+      int vals[3] = {0,0,0};
+      for(int i = 0; i<3; i++){
+          char c = sensorMappings[i];
+          int j = 0;
+          for(j = 0; j < 8; j++){
+          if(c == intensity[j])
+              break; 
+          }
+          vals[i] = intensity_values[j];
+      }
+      for(int i = 0; i<3; i++){
+        analogWrite(pins[i], vals[i]);
+      } 
     });
-  }
-}
-
-void loop() {
-
-
-    delay(100);
-    //TIMEPROFILE_BEGIN(one); // profiler
-  
-    
-    //SCOPED_TIMEPROFILE(all); // begin scoped profiler
-    Serial.println(sensorMappings);
-    int vals[3] = {0,0,0};
-    for(int i = 0; i<3; i++){
-        char c = sensorMappings[i];
-        //Serial.println(c);
-        //TIMEPROFILE_END(one); // end "one"
-        int j = 0;
-        for(j = 0; j < 8; j++){
-        if(c == intensity[j])
-            break; 
-        }
-        vals[i] = intensity_values[j];
-    }
-    
-    // Print profiler
-    //Serial.print("all : ");
-    //Serial.println(TimeProfiler.getProfile("all"));
-    //Serial.print("one : ");
-    //Serial.println(TimeProfiler.getProfile("one"));
-    
-    for(int i = 0; i<3; i++){
-      analogWrite(pins[i], vals[i]);
-    }    
+  }   
 }
