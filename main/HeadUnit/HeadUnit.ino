@@ -175,13 +175,13 @@ void control( void * params ) {
     Serial.println(cmd.haptics);
     udpBroadcast(cmd);
 
-    String sout = String(temp.lidar[0]) + "\t" + String(temp.lidar[1]) + "\t" + String(temp.lidar[2]) + "\t" +
+    //String sout = String(temp.lidar[0]) + "\t" + String(temp.lidar[1]) + "\t" + String(temp.lidar[2]) + "\t" +
                         String(temp.gyro[0]) + "\t" + String(temp.gyro[1]) + "\t" + String(temp.gyro[2]) + "\t" +
                         "0\t0\t0\0";
-    char buff[sout.length()];
-    sout.toCharArray(buff, sout.length());
-    char * bp = buff;
-    udp.broadcastTo(bp,2005);
+    //char buff[sout.length()];
+    //Sout.toCharArray(buff, sout.length());
+    //char * bp = buff;
+    //udp.broadcastTo(bp,2005);
     delay(75);
   }
 }
