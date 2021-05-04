@@ -16,17 +16,17 @@ AX = int(6)
 AY = int(7)
 AZ = int(8)
 
-L1_ANGLE = int(315)
+L1_ANGLE = int(345)
 L2_ANGLE = int(0)
-L3_ANGLE = int(45)
+L3_ANGLE = int(15)
 
 MAX_DIST = 50 # Maximum distance that can be read from the LiDAR sensors
 
 EMPTY = -2 # No stored value for angle
 NULL = -1 # INF value for angle/ out of range
 
-DPI = int(2) # Degrees per index
-SLICES = int(360//DPI)
+DPI = int(6) # Degrees per index
+SLICES = int(60)
 
 DEBUG_X_OFFSET = 5
 DEBUG_Y_OFFSET = 20
@@ -37,7 +37,7 @@ CANV_SIZE = 250
 HOST = '127.0.0.1'
 PORT = 2005
 
-SERIAL_PORT = 'COM7'
+SERIAL_PORT = 'COM18'
 BAUD_RATE = 115200
 
 #####     variables     #####
@@ -54,13 +54,19 @@ serial_connection = None
 
 
 def read_sensors():
-    data = conn.recv(2048)
-    data = data.decode().split("\t")
+    #data = conn.recv(2048)
+    data = sock.recvfrom(1024)
+    #print(data[0])
+    data = data[0].decode().split("\t")
     for i in range(len(data)):
         try:
             data[i] = float(data[i])
         except ValueError:
             data[i] = NULL
+    s = ""
+    for value in data:
+        s += str(value) + " "
+    print(s)
     return data
 
 # Converts a component-form vector to angle-magnitude
@@ -284,7 +290,7 @@ def control_haptics(x_angle, serial_queue, debug_strings):
     # range = [-2,~30)
     intensity = ['a','b','c','d','e','f','g','h']
     #intensity_values = [0, 125, 145, 160, 180, 200, 220, 255]
-    intensity_mappings = [(25,50),(18,25),(8,18),(5,8),(3,5),(2,3),(1,2),(0,1)]
+    intensity_mappings = [(25,50),(18,25),(11,18),(5,11),(4,6),(2,4),(1,3),(0,1)]
 
     # Create the command to send to the haptic device
     command = ""
@@ -312,7 +318,6 @@ def control_haptics(x_angle, serial_queue, debug_strings):
         debug_strings.append(command)
 
     # output command to serial 
-    #serial_queue.put(command)
     serial_print(command)
 
 def map_area():
@@ -326,13 +331,22 @@ def map_area():
     debug_strings = []
 
     # Gets the current states from the sensors
+    ls = sensors
     sensors = read_sensors()
-
+    for i in range(3):
+        if(sensors[i] > MAX_DIST):
+            sensors[i] = ls[i]
+        elif(sensors[i] < -MAX_DIST):
+            sensors[i] = ls[i]
+    sensors[GX] = math.degrees(sensors[GX])
+    sensors[GY] = math.degrees(sensors[GY])
+    sensors[GZ] = math.degrees(sensors[GZ])
+    
     # Canvas mulitplier
     canv_coef = normalize(CANV_SIZE, max_dist)
     
     # Translate the user with the mapped area
-    update_location(sensors[AX], sensors[AY], sensors[AZ], debug_strings)
+    #update_location(sensors[AX], sensors[AY], sensors[AZ], debug_strings)
 
     y_angle = sensors[GY] # vertical angle of the user relative to the horizon
     x_angle = sensors[GX] # forward angle of the user relative to starting rotation
@@ -354,7 +368,7 @@ def map_area():
     draw_area(canv_coef, x_angle, L1_index, L2_index, L3_index, debug_strings)
 
     # Controls haptic device output
-    control_haptics(x_angle, serial_queue, debug_strings)
+    #control_haptics(x_angle, serial_queue, debug_strings)
 
     if(DEBUG):
         debug_strings.append("map_area: {}".format(datetime.datetime.now().microsecond - start_time))
@@ -362,6 +376,9 @@ def map_area():
             canv.create_text(DEBUG_X_OFFSET,DEBUG_Y_OFFSET*(i+1),anchor='sw',text=debug_strings[i],fill='white')
     
     # Schedules the next update and GUI refresh
+    #for point in area:
+    #    print("{}, {}:".format(point[0],point[1]),end="")
+    #print("\n")
     root.after(1,map_area)
 
 #########  Subprocess for serial communication #########
@@ -393,7 +410,7 @@ if( __name__ == '__main__'):
     #serial_queue = Queue()
     #serial_process = Process(target=serial_communication, args=(serial_queue,))
     #serial_process.start()
-    serial_connection = connect(SERIAL_PORT, BAUD_RATE)
+    #serial_connection = connect(SERIAL_PORT, BAUD_RATE)
 
     # Initialize the empty mapped area
     area = [(i*DPI,EMPTY) for i in range(SLICES)]
@@ -402,10 +419,10 @@ if( __name__ == '__main__'):
     max_dist = 1
     
     # Socket connection to sensors
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((HOST,PORT))
-    s.listen()
-    conn, addr = s.accept()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('',2005))
+    #s.listen()
+    #conn, addr = s.accept()
 
     # UI 
     root = tkinter.Tk()
