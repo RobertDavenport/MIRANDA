@@ -1,4 +1,4 @@
-#include <TimeProfiler.h>
+//#include <TimeProfiler.h>
 #include <WiFi.h>
 #include <AsyncUDP.h>
 #include <analogWrite.h>
@@ -8,7 +8,7 @@ const char * password = "password";
 
 char intensity[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
 int intensity_values[8] = {255, 220, 205, 190, 175, 155, 0, 0};
-int pins[3] = {13, 12, 14};
+int pins[3] = {14, 12, 13};
 int port = 1234;
 char * sensorMappings;
 
